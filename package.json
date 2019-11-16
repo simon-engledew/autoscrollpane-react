@@ -1,0 +1,20 @@
+{
+  "name": "autoscrollpane-react",
+  "version": "1.0.5",
+  "description": "An autoscroll pane that handles images changing size as they load",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+  },
+  "prepublish": "tsc",
+  "author": "Simon Engledew",
+  "license": "MIT",
+  "dependencies": {
+    "react": "^16.12.0"
+  },
+  "devDependencies": {
+    "@types/react": "^16.9.11",
+    "typescript": "^3.7.2"
+  },
+  "homepage": "https://github.com/simon-engledew/autoscrollpane-react"
+}
