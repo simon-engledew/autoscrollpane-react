@@ -10,6 +10,8 @@ Scrolling is triggered by DOM mutations and supports elements that change size a
 
 You can achieve the same effect using pure CSS/flexbox in Chrome but at the time of writing it doesn't work in Firefox due to a rendering bug.
 
+Using `scrollToBottom` also has trouble if the content is frequently updating. Short of using it inside a `setInterval`, it is going to occassionally scroll short of the bottom.
+
 This makes absolutely sure the element reliably scrolls down, regardless of what is happening inside.
 
 ## Tradeoffs
