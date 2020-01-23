@@ -1,5 +1,10 @@
 import React from 'react';
-import { BoxSizingProperty, OverflowAnchorProperty, OverflowYProperty, ScrollBehaviorProperty } from 'csstype';
+import {
+  BoxSizingProperty,
+  OverflowAnchorProperty,
+  OverflowYProperty,
+  ScrollBehaviorProperty,
+} from 'csstype';
 
 function tween(t: number, b: number, c: number, d: number) {
   t /= d / 2;
@@ -10,148 +15,135 @@ function tween(t: number, b: number, c: number, d: number) {
   return (c / 2) * (t * t * t + 2) + b;
 }
 
-export default class AutoScrollPane extends React.PureComponent<{threshold: number}> {
-  private static readonly style = {
+const styles = {
+  div: {
     padding: 0,
     margin: 0,
     boxSizing: 'border-box' as BoxSizingProperty,
-    height: '100%' ,
+    height: '100%',
     overflowY: 'scroll' as OverflowYProperty,
     scrollBehaviour: 'none' as ScrollBehaviorProperty,
     overflowAnchor: 'none' as OverflowAnchorProperty,
-  };
+  },
+};
 
-  static defaultProps = {
-    threshold: 150
-  };
+export default function AutoScrollPane({
+  children,
+}: React.PropsWithChildren<{}>) {
+  const divRef = React.useRef<HTMLDivElement>(null);
 
-  private observer?: MutationObserver;
-  private element?: HTMLDivElement;
-  private timeout?: number;
+  React.useEffect(
+    function() {
+      if (divRef.current) {
+        var animationFrame: number | undefined;
+        var timeout: number | undefined;
+        var scrollTimeStamp: number;
+        var paused: boolean;
+        var previousScrollHeight: number;
+        var target: number;
+        var then: number;
+        var start: number;
 
-  private animationFrame?: number;
-  private start?: number;
-  private target?: number;
-  private then?: number;
+        function animate() {
+          if (animationFrame && divRef.current) {
+            const span = Date.now() - then;
+            const position = divRef.current.scrollTop;
 
-  private previousScrollHeight = 0;
-  private previousScrollTop = 0;
-  private paused = false;
+            // keep animating if the target has changed
+            if (Math.ceil(position) < target) {
+              divRef.current.scrollTop = Math.min(
+                tween(span, start, target - start, 500),
+                target
+              );
+              animationFrame = window.requestAnimationFrame(animate);
+            } else {
+              animationFrame = undefined;
+            }
+          }
+        }
 
-  private setElement = (element: HTMLDivElement) => {
-    this.element = element;
-  };
+        function scrollToBottom() {
+          if (divRef.current) {
+            if (!animationFrame) {
+              then = Date.now();
+              start = divRef.current.scrollTop;
+              animationFrame = window.requestAnimationFrame(animate);
+            }
 
-  scrollToBottom = (): void => {
-    if (!this.element) {
-      return;
-    }
-    if (!this.animationFrame) {
-      this.then = Date.now();
-      this.start = this.element.scrollTop;
-      this.animationFrame = window.requestAnimationFrame(this.animate);
-    }
-    this.target = this.element.scrollHeight - this.element.clientHeight;
-    this.timeout = undefined;
-  };
+            const { scrollHeight, clientHeight } = divRef.current;
 
-  private animate = () => {
-    if (this.animationFrame) {
-      const span = Date.now() - this.then!;
-      const position = this.element!.scrollTop;
-      // keep animating if the target has changed
-      if (Math.ceil(position) < this.target!) {
-        this.element!.scrollTop = Math.min(
-          tween(span, this.start!, this.target! - this.start!, 500),
-          this.target!
-        );
-        this.animationFrame = window.requestAnimationFrame(this.animate);
-      } else {
-        this.previousScrollTop = position;
-        this.animationFrame = undefined;
+            target = scrollHeight - clientHeight;
+            timeout = undefined;
+          }
+        }
+
+        function onMutate() {
+          if (paused) {
+            return;
+          }
+
+          if (divRef.current) {
+            const { scrollHeight } = divRef.current;
+
+            const heightChanged = scrollHeight !== previousScrollHeight;
+
+            if (heightChanged) {
+              timeout && window.clearTimeout(timeout);
+
+              previousScrollHeight = scrollHeight;
+
+              if (!paused) {
+                // simple 20ms debounce
+                timeout = window.setTimeout(scrollToBottom, 20);
+              }
+            }
+          }
+        }
+
+        function onScroll(e: Event) {
+          if (animationFrame === undefined && divRef.current) {
+            if (scrollTimeStamp) {
+              if (scrollTimeStamp > e.timeStamp - 50) {
+                const {
+                  scrollTop,
+                  scrollHeight,
+                  clientHeight,
+                } = divRef.current;
+                const bottom = scrollTop + clientHeight;
+                paused = bottom < scrollHeight;
+              }
+            }
+            scrollTimeStamp = e.timeStamp;
+          }
+        }
+
+        const observer = new MutationObserver(onMutate);
+
+        observer.observe(divRef.current, {
+          attributes: true,
+          childList: true,
+          subtree: true,
+        });
+
+        divRef.current.addEventListener('scroll', onScroll, {
+          capture: true,
+          passive: true,
+        });
+
+        return function() {
+          observer.disconnect();
+
+          animationFrame && window.cancelAnimationFrame(animationFrame);
+          timeout && window.clearTimeout(timeout);
+        };
       }
-    }
-  };
+    },
+    [divRef.current]
+  );
 
-  private observe = () => {
-    if (this.paused) {
-      return;
-    }
-
-    const {scrollTop, scrollHeight, clientHeight} = this.element!;
-
-    const heightChanged = scrollHeight !== this.previousScrollHeight;
-
-    // check if user has manually changed scroll position
-    if (!this.animationFrame && scrollTop !== this.previousScrollTop) {
-      const bottom = scrollTop + clientHeight;
-
-      this.paused = bottom < scrollHeight;
-    }
-
-    if (heightChanged) {
-      if (this.timeout) {
-        window.clearTimeout(this.timeout);
-      }
-
-      this.previousScrollHeight = scrollHeight;
-      this.previousScrollTop = scrollTop;
-
-      if (!this.paused) {
-        // simple 20ms debounce
-        this.timeout = window.setTimeout(this.scrollToBottom, 20);
-      }
-    }
-  };
-
-  private unpause = () => {
-    if (this.paused) {
-      const {scrollTop, scrollHeight, clientHeight} = this.element!;
-
-      const bottom = scrollTop + clientHeight;
-
-      this.paused = bottom < scrollHeight;
-
-      this.previousScrollTop = scrollTop;
-    }
-  }
-
-  componentDidMount() {
-    this.observer = new MutationObserver(this.observe);
-    this.observer.observe(this.element!, {
-      attributes: true,
-      childList: true,
-      subtree: true,
-    });
-
-    this.element!.addEventListener('scroll', this.unpause, {
-      capture: true,
-      passive: true
-    });
-  }
-
-  componentWillUnmount() {
-    if (this.timeout) {
-      window.clearTimeout(this.timeout);
-    }
-
-    if (this.observer) {
-      this.observer.disconnect();
-      this.observer = undefined;
-    }
-
-    if (this.animationFrame) {
-      window.cancelAnimationFrame(this.animationFrame);
-    }
-
-    this.element!.removeEventListener('scroll', this.unpause);
-  }
-
-  render() {
-    return (
-      <div ref={this.setElement} style={AutoScrollPane.style}>
-        {this.props.children}
-      </div>
-    );
-  }
+  return (
+    <div ref={divRef} style={styles.div}>
+      {children}
+    </div>
+  );
 }
